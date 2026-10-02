@@ -59,4 +59,8 @@ pub enum Commands {
     Shell {
         name: String,
     },
+
+    Builtin {
+        name: String,
+    },
 }

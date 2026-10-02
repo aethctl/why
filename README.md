@@ -72,6 +72,7 @@ Provided by      python3-3.14.7
 | File | `why ./config.kdl` | canonical path, owner, Git provenance |
 | Environment | `why HOME` | current value and possible source |
 | Shell | `why fetch` | alias or function definition and source |
+| Builtin | `why cd` | what it does and why the shell implements it directly |
 | Project | `why this` | repo, stack, live processes, listening ports |
 
 Explicit resolvers remain available when a name is ambiguous.

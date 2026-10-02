@@ -1,9 +1,9 @@
 use anyhow::Result;
 use owo_colors::OwoColorize;
 
-use crate::model::{Evidence, Finding};
+use crate::model::{Evidence, Fact, Finding};
 
-const CARD_WIDTH: usize = 76;
+const CARD_WIDTH: usize = 74;
 const INNER_WIDTH: usize = CARD_WIDTH - 4;
 
 pub fn print(finding: &Finding, json: bool, plain: bool) -> Result<()> {
@@ -39,49 +39,85 @@ fn print_plain(finding: &Finding) {
 }
 
 fn print_card(finding: &Finding) {
-    top_border("WHY");
-    card_line(&finding.subject);
-    card_line(&format!("Type: {}", friendly_kind(&finding.kind)));
+    top_border(&finding.subject);
+    card_styled_line(
+        &subtitle(finding),
+        &format!("{}", subtitle(finding).dimmed()),
+    );
 
-    section_border("WHAT IS THIS?");
-    for line in what_is_it(finding) {
-        card_line(&line);
-    }
+    card_blank();
+    section_label("what");
+    card_paragraph(&what_is_it(finding));
 
-    section_border("WHY IS IT HERE?");
-    for line in why_is_it_here(finding) {
-        card_line(&line);
-    }
+    card_blank();
+    section_label("why");
+    card_paragraph(&why_is_it_here(finding));
 
-    section_border("DETAILS");
-    for fact in &finding.facts {
-        if matches!(
-            fact.label.as_str(),
-            "Description" | "Reason" | "Store path" | "Executable"
-        ) {
-            continue;
+    let visible: Vec<&Fact> = finding
+        .facts
+        .iter()
+        .filter(|fact| show_in_default(finding, &fact.label))
+        .collect();
+
+    if !visible.is_empty() {
+        card_blank();
+        section_label("details");
+        for fact in visible {
+            card_fact(display_label(&fact.label), &fact.value, fact.evidence);
         }
-        card_fact(display_label(&fact.label), &fact.value, fact.evidence);
     }
 
     if !finding.notes.is_empty() {
-        section_border("NOTES");
+        card_blank();
+        section_label("note");
         for note in &finding.notes {
-            card_line(&format!("• {note}"));
+            card_paragraph(note);
         }
     }
 
     bottom_border();
     println!(
-        "{}",
-        "Tip: use --deep for more detail, --plain for scripts.".dimmed()
+        "  {}   {}   {}   {}",
+        "--deep".bold(),
+        "more detail".dimmed(),
+        "·".dimmed(),
+        "--plain  script-friendly".dimmed()
     );
+}
+
+fn subtitle(finding: &Finding) -> String {
+    match finding.kind.as_str() {
+        "package" => finding
+            .value("Store package")
+            .map(|package| format!("command  ·  {package}"))
+            .unwrap_or_else(|| "software package".to_owned()),
+        "command" => finding
+            .value("Provided by")
+            .map(|package| format!("command  ·  {package}"))
+            .unwrap_or_else(|| "terminal command".to_owned()),
+        "builtin" => finding
+            .value("Shell")
+            .map(|shell| format!("shell builtin  ·  {shell}"))
+            .unwrap_or_else(|| "shell builtin".to_owned()),
+        "shell" => finding
+            .value("Kind")
+            .map(|kind| format!("shell {kind}"))
+            .unwrap_or_else(|| "shell shortcut".to_owned()),
+        "service" => "systemd service".to_owned(),
+        "process" => "running process".to_owned(),
+        "port" => "network listener".to_owned(),
+        "file" => "filesystem path".to_owned(),
+        "environment" => "environment variable".to_owned(),
+        "context" => "current project".to_owned(),
+        _ => friendly_kind(&finding.kind).to_owned(),
+    }
 }
 
 fn friendly_kind(kind: &str) -> &'static str {
     match kind {
-        "package" => "software package / command",
+        "package" => "software package",
         "command" => "terminal command",
+        "builtin" => "shell builtin",
         "service" => "background service",
         "process" => "running program",
         "port" => "network port",
@@ -93,26 +129,19 @@ fn friendly_kind(kind: &str) -> &'static str {
     }
 }
 
-fn what_is_it(finding: &Finding) -> Vec<String> {
+fn what_is_it(finding: &Finding) -> String {
     if let Some(description) = finding.value("Description") {
-        let package = finding
-            .value("Store package")
-            .or_else(|| finding.value("Provided by"));
-
-        let text = match package {
-            Some(package) => {
-                format!("{description} It is provided by the {package} package.")
-            }
-            None => description.to_owned(),
-        };
-
-        return wrap_text(&text, INNER_WIDTH);
+        return description.to_owned();
     }
 
-    let text = match finding.kind.as_str() {
+    match finding.kind.as_str() {
         "package" => format!("{} is software available on this system.", finding.subject),
         "command" => format!(
             "{} is a command you can run from the terminal.",
+            finding.subject
+        ),
+        "builtin" => format!(
+            "{} is a command implemented directly by your shell.",
             finding.subject
         ),
         "service" => format!(
@@ -138,62 +167,111 @@ fn what_is_it(finding: &Finding) -> Vec<String> {
         ),
         "context" => "This is the project or directory you are currently working in.".to_owned(),
         _ => finding.summary.clone(),
-    };
-
-    wrap_text(&text, INNER_WIDTH)
+    }
 }
 
-fn why_is_it_here(finding: &Finding) -> Vec<String> {
-    let text = match finding.value("Source") {
+fn why_is_it_here(finding: &Finding) -> String {
+    if finding.kind == "builtin"
+        && let Some(reason) = finding.value("Reason")
+    {
+        return reason.to_owned();
+    }
+
+    match finding.value("Source") {
         Some("NixOS system profile") => {
             let package = finding.value("Store package").unwrap_or(&finding.subject);
             format!(
-                "Your current NixOS system includes {package} because another part of the active system depends on it. You did not necessarily install it yourself."
+                "NixOS includes {package} as part of the active system because something else depends on it. You may never have installed it directly."
             )
         }
         Some("Declarative Nix configuration") => {
-            "It is present because your Nix configuration declares it directly. Rebuilding the system keeps it available.".to_owned()
+            "Your Nix configuration declares it directly, so every rebuild keeps it available."
+                .to_owned()
         }
         Some("nix profile") => {
-            "It was installed into your personal Nix profile, so it is available to your user account.".to_owned()
+            "It was installed into your personal Nix profile, so it is available to your user account."
+                .to_owned()
+        }
+        Some("Shell builtin") => {
+            "Your shell provides this command itself instead of launching a separate program."
+                .to_owned()
         }
         _ => match finding.kind.as_str() {
             "process" => finding
                 .value("Why running")
-                .map(|_| "It is running because another process started it. The process chain is shown below.".to_owned())
-                .unwrap_or_else(|| "It is currently running in this session or system environment.".to_owned()),
-            "port" => "A running program opened this port so it can accept network connections.".to_owned(),
-            "service" => "systemd knows about this service and controls when it starts or stops.".to_owned(),
+                .map(|_| {
+                    "Another process started it. The process ancestry below shows the chain."
+                        .to_owned()
+                })
+                .unwrap_or_else(|| {
+                    "It is currently running in this session or system environment.".to_owned()
+                }),
+            "port" => {
+                "A running program opened this port so it can accept network connections.".to_owned()
+            }
+            "service" => {
+                "systemd knows about this service and controls when it starts or stops.".to_owned()
+            }
             "file" => finding
                 .value("Provided by")
-                .map(|owner| format!("This path exists because the {owner} package provides it."))
-                .unwrap_or_else(|| "This path exists in your filesystem, but no supported package manager claimed ownership of it.".to_owned()),
+                .map(|owner| format!("The {owner} package provides this path."))
+                .unwrap_or_else(|| {
+                    "The path exists on your filesystem, but no supported package manager claimed it."
+                        .to_owned()
+                }),
             "environment" => finding
                 .value("Possible source")
-                .map(|source| format!("Your shell or environment configuration appears to set it from {source}."))
-                .unwrap_or_else(|| "It is set in the environment inherited by the current process.".to_owned()),
+                .map(|source| format!("Your shell or environment appears to set it from {source}."))
+                .unwrap_or_else(|| {
+                    "The current process inherited it from its environment.".to_owned()
+                }),
             "shell" => finding
                 .value("Defined at")
                 .map(|source| format!("Your shell configuration defines it at {source}."))
                 .unwrap_or_else(|| "Your shell configuration defines this shortcut.".to_owned()),
-            "context" => "You asked about this, so why inspected the current working directory and the activity connected to it.".to_owned(),
+            "builtin" => {
+                "Your shell implements it directly because it needs to interact with shell state."
+                    .to_owned()
+            }
+            "context" => {
+                "You asked about this, so why inspected the current directory and its live activity."
+                    .to_owned()
+            }
             _ => finding.summary.clone(),
         },
-    };
+    }
+}
 
-    wrap_text(&text, INNER_WIDTH)
+fn show_in_default(finding: &Finding, label: &str) -> bool {
+    if matches!(
+        label,
+        "Description" | "Reason" | "Store path" | "Executable"
+    ) {
+        return false;
+    }
+
+    if finding.kind == "builtin" && label == "Source" {
+        return false;
+    }
+
+    true
 }
 
 fn display_label(label: &str) -> &str {
     match label {
-        "Store package" => "Package",
-        "Source" => "Comes from",
-        "Referenced by" => "Used by",
-        "Declared at" => "Declared in",
-        "Working dir" => "Working in",
-        "Systemd unit" => "Service",
-        "Local address" => "Address",
-        "Possible source" => "Set from",
+        "Store package" => "package",
+        "Source" => "source",
+        "Referenced by" => "used by",
+        "Declared at" => "declared in",
+        "Working dir" => "working in",
+        "Systemd unit" => "service",
+        "Local address" => "address",
+        "Possible source" => "set from",
+        "Defined at" => "defined in",
+        "Shell" => "shell",
+        "Kind" => "kind",
+        "Also defined at" => "also in",
+        "Parent PID" => "parent",
         _ => label,
     }
 }
@@ -216,64 +294,82 @@ fn print_plain_fact(label: &str, value: &str, evidence: Evidence) {
 fn card_fact(label: &str, value: &str, evidence: Evidence) {
     let marker = match evidence {
         Evidence::Confirmed => "",
-        Evidence::Inferred => " (inferred)",
+        Evidence::Inferred => "  ~ inferred",
     };
 
-    let label_width = 15;
-    let value_width = INNER_WIDTH.saturating_sub(label_width + 1);
-    let logical_lines: Vec<&str> = value.lines().collect();
-    let mut first = true;
+    let label_width = 13;
+    let value_width = INNER_WIDTH.saturating_sub(label_width + 2);
 
-    for (index, logical_line) in logical_lines.iter().enumerate() {
-        let mut wrapped = wrap_text(logical_line, value_width);
-
-        if label == "Used by" && index >= 3 && logical_lines.len() > 4 {
-            continue;
+    if label == "used by" {
+        let lines: Vec<&str> = value.lines().collect();
+        let shown: Vec<&str> = lines.iter().copied().take(2).collect();
+        let mut summary = shown.join("  ·  ");
+        if lines.len() > shown.len() {
+            summary.push_str(&format!("  +{} more", lines.len() - shown.len()));
         }
+        card_fact_line(label, &summary, marker, label_width, value_width);
+        return;
+    }
 
-        if label == "Used by" && index == 3 && logical_lines.len() > 4 {
-            wrapped = vec![format!("…and {} more", logical_lines.len() - 3)];
-        }
+    if label == "declared in" {
+        let first = value.lines().next().unwrap_or(value);
+        card_fact_line(label, first, marker, label_width, value_width);
+        return;
+    }
 
+    let mut first_row = true;
+    for logical_line in value.lines() {
+        let wrapped = wrap_text(logical_line, value_width);
         for line in wrapped {
-            let prefix = if first {
-                format!("{label:<label_width$}")
-            } else {
-                " ".repeat(label_width)
-            };
-            let suffix = if first { marker } else { "" };
-            card_raw_line(&format!("{prefix} {line}{suffix}"));
-            first = false;
+            let row_label = if first_row { label } else { "" };
+            let row_marker = if first_row { marker } else { "" };
+            card_fact_line(row_label, &line, row_marker, label_width, value_width);
+            first_row = false;
         }
     }
+}
 
-    if first {
-        card_raw_line(&format!("{label:<label_width$} {marker}"));
+fn card_fact_line(label: &str, value: &str, marker: &str, label_width: usize, value_width: usize) {
+    let wrapped = wrap_text(value, value_width);
+    for (index, line) in wrapped.iter().enumerate() {
+        let shown_label = if index == 0 { label } else { "" };
+        let shown_marker = if index == 0 { marker } else { "" };
+        card_raw_line(&format!(
+            "{shown_label:<label_width$}  {line}{shown_marker}"
+        ));
     }
 }
 
-fn top_border(title: &str) {
-    let prefix = format!("╭─ {title} ");
-    let fill = CARD_WIDTH.saturating_sub(prefix.chars().count() + 1);
-    println!("{prefix}{}╮", "─".repeat(fill));
-}
-
-fn section_border(title: &str) {
-    let prefix = format!("├─ {title} ");
-    let fill = CARD_WIDTH.saturating_sub(prefix.chars().count() + 1);
-    println!("{prefix}{}┤", "─".repeat(fill));
+fn top_border(subject: &str) {
+    let title = format!(" why · {subject} ");
+    let fill = CARD_WIDTH.saturating_sub(title.chars().count() + 2);
+    println!("╭─{}{}╮", title, "─".repeat(fill));
 }
 
 fn bottom_border() {
     println!("╰{}╯", "─".repeat(CARD_WIDTH - 2));
 }
 
-fn card_line(text: &str) {
-    for line in wrap_text(text, INNER_WIDTH) {
-        let width = line.chars().count();
-        let padding = INNER_WIDTH.saturating_sub(width);
-        println!("│ {line}{} │", " ".repeat(padding));
+fn section_label(label: &str) {
+    let raw = format!("  {label}");
+    let styled = format!("  {}", label.dimmed());
+    card_styled_line(&raw, &styled);
+}
+
+fn card_blank() {
+    card_raw_line("");
+}
+
+fn card_paragraph(text: &str) {
+    for line in wrap_text(text, INNER_WIDTH - 2) {
+        card_raw_line(&format!("  {line}"));
     }
+}
+
+fn card_styled_line(raw: &str, styled: &str) {
+    let width = raw.chars().count();
+    let padding = INNER_WIDTH.saturating_sub(width);
+    println!("│ {styled}{} │", " ".repeat(padding));
 }
 
 fn card_raw_line(text: &str) {

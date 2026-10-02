@@ -31,6 +31,7 @@ fn run() -> Result<()> {
         (Some(Commands::Port { port }), _) => resolver::port::resolve(*port)?,
         (Some(Commands::Env { name }), _) => resolver::env::resolve(name)?,
         (Some(Commands::Shell { name }), _) => resolver::shell::resolve(name)?,
+        (Some(Commands::Builtin { name }), _) => resolver::builtin::resolve(name)?,
         (None, Some(subject)) => resolver::auto::resolve(subject)?,
         (None, None) => bail!("tell me what to explain, for example: why git"),
     };

@@ -41,6 +41,10 @@ pub fn resolve(subject: &str) -> Result<Finding> {
         return resolver::shell::resolve(subject);
     }
 
+    if resolver::builtin::exists(subject) {
+        return resolver::builtin::resolve(subject);
+    }
+
     if let Ok(finding) = resolver::package::resolve(subject) {
         return Ok(finding);
     }
@@ -54,7 +58,7 @@ pub fn resolve(subject: &str) -> Result<Finding> {
     }
 
     bail!(
-        "nothing matched '{subject}'\n\nchecked: environment, shell, package, service, command, file, process, port\ntry an explicit resolver such as: why package {subject}"
+        "nothing matched '{subject}'\n\nchecked: environment, shell, builtin, package, service, command, file, process, port\ntry an explicit resolver such as: why package {subject}"
     )
 }
 

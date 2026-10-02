@@ -13,7 +13,7 @@
         in {
           default = pkgs.rustPlatform.buildRustPackage {
             pname = "why-linux";
-            version = "0.1.2";
+            version = "0.1.3";
             src = ./.;
 
             cargoLock.lockFile = ./Cargo.lock;
