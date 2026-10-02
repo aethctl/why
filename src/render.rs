@@ -1,7 +1,7 @@
 use anyhow::Result;
 use owo_colors::OwoColorize;
 
-use crate::model::Finding;
+use crate::model::{Evidence, Finding};
 
 pub fn print(finding: &Finding, json: bool) -> Result<()> {
     if json {
@@ -14,7 +14,7 @@ pub fn print(finding: &Finding, json: bool) -> Result<()> {
     println!();
 
     for fact in &finding.facts {
-        print_fact(&fact.label, &fact.value);
+        print_fact(&fact.label, &fact.value, fact.evidence);
     }
 
     if !finding.notes.is_empty() {
@@ -27,11 +27,15 @@ pub fn print(finding: &Finding, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn print_fact(label: &str, value: &str) {
+fn print_fact(label: &str, value: &str, evidence: Evidence) {
     let mut lines = value.lines();
     let first = lines.next().unwrap_or_default();
+    let marker = match evidence {
+        Evidence::Confirmed => String::new(),
+        Evidence::Inferred => format!(" {}", "(inferred)".dimmed()),
+    };
 
-    println!("{:<16} {}", label.dimmed(), first);
+    println!("{:<16} {}{}", label.dimmed(), first, marker);
 
     for line in lines {
         println!("{:<16} {}", "", line);

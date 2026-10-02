@@ -11,11 +11,17 @@ pub fn command_path(name: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-pub fn nix_store_package(path: &Path) -> Option<String> {
+pub fn nix_store_root(path: &Path) -> Option<PathBuf> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let text = canonical.to_string_lossy();
     let rest = text.strip_prefix("/nix/store/")?;
     let store_item = rest.split('/').next()?;
+    Some(PathBuf::from("/nix/store").join(store_item))
+}
+
+pub fn nix_store_package(path: &Path) -> Option<String> {
+    let root = nix_store_root(path)?;
+    let store_item = root.file_name()?.to_str()?;
     let (_, package) = store_item.split_once('-')?;
     Some(package.to_owned())
 }
@@ -42,12 +48,16 @@ pub fn pacman_owner(path: &Path) -> Result<Option<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::nix_store_package;
+    use super::{nix_store_package, nix_store_root};
     use std::path::Path;
 
     #[test]
-    fn parses_nix_store_package() {
+    fn parses_nix_store_path() {
         let path = Path::new("/nix/store/abc123-git-2.55.0/bin/git");
+        assert_eq!(
+            nix_store_root(path).as_deref(),
+            Some(Path::new("/nix/store/abc123-git-2.55.0"))
+        );
         assert_eq!(nix_store_package(path).as_deref(), Some("git-2.55.0"));
     }
 }

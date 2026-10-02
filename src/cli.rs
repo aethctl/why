@@ -7,7 +7,10 @@ pub struct Cli {
     pub json: bool,
 
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
+
+    #[arg(value_name = "THING")]
+    pub subject: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]

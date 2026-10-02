@@ -1,5 +1,12 @@
 use serde::Serialize;
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Evidence {
+    Confirmed,
+    Inferred,
+}
+
 #[derive(Debug, Serialize)]
 pub struct Finding {
     pub subject: String,
@@ -13,6 +20,7 @@ pub struct Finding {
 pub struct Fact {
     pub label: String,
     pub value: String,
+    pub evidence: Evidence,
 }
 
 impl Finding {
@@ -34,6 +42,16 @@ impl Finding {
         self.facts.push(Fact {
             label: label.into(),
             value: value.into(),
+            evidence: Evidence::Confirmed,
+        });
+        self
+    }
+
+    pub fn inferred_fact(mut self, label: impl Into<String>, value: impl Into<String>) -> Self {
+        self.facts.push(Fact {
+            label: label.into(),
+            value: value.into(),
+            evidence: Evidence::Inferred,
         });
         self
     }
