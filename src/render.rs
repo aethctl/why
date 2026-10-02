@@ -341,13 +341,21 @@ fn card_fact_line(label: &str, value: &str, marker: &str, label_width: usize, va
 }
 
 fn top_border(subject: &str) {
+    println!("{}", top_border_text(subject));
+}
+
+fn top_border_text(subject: &str) -> String {
     let title = format!(" why · {subject} ");
-    let fill = CARD_WIDTH.saturating_sub(title.chars().count() + 2);
-    println!("╭─{}{}╮", title, "─".repeat(fill));
+    let fill = CARD_WIDTH.saturating_sub(title.chars().count() + 3);
+    format!("╭─{}{}╮", title, "─".repeat(fill))
 }
 
 fn bottom_border() {
-    println!("╰{}╯", "─".repeat(CARD_WIDTH - 2));
+    println!("{}", bottom_border_text());
+}
+
+fn bottom_border_text() -> String {
+    format!("╰{}╯", "─".repeat(CARD_WIDTH - 2))
 }
 
 fn section_label(label: &str) {
@@ -426,12 +434,22 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::wrap_text;
+    use super::{CARD_WIDTH, bottom_border_text, top_border_text, wrap_text};
 
     #[test]
     fn wraps_text_to_requested_width() {
         let lines = wrap_text("one two three four", 9);
         assert_eq!(lines, vec!["one two", "three", "four"]);
         assert!(lines.iter().all(|line| line.chars().count() <= 9));
+    }
+
+    #[test]
+    fn card_borders_have_matching_widths() {
+        assert_eq!(top_border_text("cd").chars().count(), CARD_WIDTH);
+        assert_eq!(
+            top_border_text("a-longer-subject").chars().count(),
+            CARD_WIDTH
+        );
+        assert_eq!(bottom_border_text().chars().count(), CARD_WIDTH);
     }
 }
