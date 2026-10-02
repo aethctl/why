@@ -7,3 +7,4 @@ pub mod port;
 pub mod process;
 pub mod project;
 pub mod service;
+pub mod shell;

@@ -102,11 +102,18 @@ fn git_state(repo: &Path, path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::git_root;
-    use std::path::Path;
+    use std::fs;
 
     #[test]
-    fn finds_git_root_from_current_repo() {
-        let root = git_root(Path::new("src/main.rs"));
-        assert!(root.is_some());
+    fn finds_git_root() {
+        let root = std::env::temp_dir().join(format!("why-git-root-test-{}", std::process::id()));
+        let nested = root.join("a/b");
+
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::create_dir_all(&nested).unwrap();
+
+        assert_eq!(git_root(&nested).as_deref(), Some(root.as_path()));
+
+        fs::remove_dir_all(root).unwrap();
     }
 }

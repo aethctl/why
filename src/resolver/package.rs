@@ -49,17 +49,21 @@ fn resolve_pacman(name: &str) -> Result<Option<Finding>> {
         format!("Direct dependents: {required_by}")
     };
 
-    Ok(Some(
-        Finding::new(
-            name,
-            "package",
-            format!("{name} is installed through pacman"),
-        )
-        .fact("Version", version)
-        .fact("Install reason", reason)
-        .fact("Required by", required_by)
-        .fact("Removal impact", impact),
-    ))
+    let mut finding = Finding::new(
+        name,
+        "package",
+        format!("{name} is installed through pacman"),
+    )
+    .fact("Version", version)
+    .fact("Install reason", reason)
+    .fact("Required by", required_by)
+    .fact("Removal impact", impact);
+
+    if let Some(history) = pacman_history(name) {
+        finding = finding.fact("History", history);
+    }
+
+    Ok(Some(finding))
 }
 
 fn resolve_nix(name: &str) -> Result<Option<Finding>> {
@@ -89,6 +93,10 @@ fn resolve_nix(name: &str) -> Result<Option<Finding>> {
         );
     } else {
         finding = finding.fact("Declared at", declarations.join("\n"));
+
+        if let Some(history) = nix_declaration_history(name, &declarations) {
+            finding = finding.fact("History", history);
+        }
     }
 
     if let Some(referrers) = nix_referrers(&store_root) {
@@ -124,6 +132,73 @@ fn resolve_nix_profile(name: &str) -> Result<Option<Finding>> {
             "Removing the profile entry will remove it from that profile on the next profile update.",
         ),
     ))
+}
+
+fn pacman_history(name: &str) -> Option<String> {
+    let content = std::fs::read_to_string("/var/log/pacman.log").ok()?;
+    let installed = format!(" installed {name} (");
+    let upgraded = format!(" upgraded {name} (");
+    let reinstalled = format!(" reinstalled {name} (");
+
+    let mut entries: Vec<String> = content
+        .lines()
+        .filter(|line| {
+            line.contains(&installed) || line.contains(&upgraded) || line.contains(&reinstalled)
+        })
+        .filter_map(|line| {
+            let (timestamp, event) = line.split_once("] [ALPM] ")?;
+            Some(format!("{} {}", timestamp.trim_start_matches('['), event))
+        })
+        .collect();
+
+    entries.reverse();
+    entries.truncate(3);
+
+    if entries.is_empty() {
+        None
+    } else {
+        Some(entries.join("\n"))
+    }
+}
+
+fn nix_declaration_history(name: &str, declarations: &[String]) -> Option<String> {
+    if !system::command_exists("git") {
+        return None;
+    }
+
+    for declaration in declarations {
+        let location = declaration.lines().next()?;
+        let (path_text, _) = location.rsplit_once(':')?;
+        let path = Path::new(path_text);
+        let root = path
+            .ancestors()
+            .find(|ancestor| ancestor.join(".git").exists())?;
+        let relative = path.strip_prefix(root).ok()?;
+
+        let root = root.to_string_lossy();
+        let relative = relative.to_string_lossy();
+        let out = system::run(
+            "git",
+            &[
+                "-C",
+                &root,
+                "log",
+                "-1",
+                "--format=%cs %h %s",
+                "-S",
+                name,
+                "--",
+                &relative,
+            ],
+        )
+        .ok()?;
+
+        if out.success && !out.stdout.is_empty() {
+            return Some(out.stdout);
+        }
+    }
+
+    None
 }
 
 fn nix_referrers(store_root: &Path) -> Option<String> {

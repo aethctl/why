@@ -37,6 +37,10 @@ pub fn resolve(subject: &str) -> Result<Finding> {
         return resolver::env::resolve(subject);
     }
 
+    if resolver::shell::exists(subject) {
+        return resolver::shell::resolve(subject);
+    }
+
     if let Ok(finding) = resolver::package::resolve(subject) {
         return Ok(finding);
     }
@@ -50,7 +54,7 @@ pub fn resolve(subject: &str) -> Result<Finding> {
     }
 
     bail!(
-        "nothing matched '{subject}'\n\nchecked: environment, package, service, command, file, process, port\ntry an explicit resolver such as: why package {subject}"
+        "nothing matched '{subject}'\n\nchecked: environment, shell, package, service, command, file, process, port\ntry an explicit resolver such as: why package {subject}"
     )
 }
 

@@ -9,6 +9,12 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub plain: bool,
 
+    #[arg(long, global = true)]
+    pub deep: bool,
+
+    #[arg(long, global = true)]
+    pub report: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 
@@ -47,6 +53,10 @@ pub enum Commands {
     },
 
     Env {
+        name: String,
+    },
+
+    Shell {
         name: String,
     },
 }

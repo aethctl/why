@@ -56,6 +56,21 @@ impl Finding {
         self
     }
 
+    pub fn push_fact(&mut self, label: impl Into<String>, value: impl Into<String>) {
+        self.facts.push(Fact {
+            label: label.into(),
+            value: value.into(),
+            evidence: Evidence::Confirmed,
+        });
+    }
+
+    pub fn value(&self, label: &str) -> Option<&str> {
+        self.facts
+            .iter()
+            .find(|fact| fact.label == label)
+            .map(|fact| fact.value.as_str())
+    }
+
     pub fn note(mut self, note: impl Into<String>) -> Self {
         self.notes.push(note.into());
         self
