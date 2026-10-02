@@ -16,17 +16,20 @@ and what your machine is doing with them.
 ```text
 $ why git
 
-git
-git is present through the Nix store
-
-Store package    git-2.55.0
-Declared at      /etc/nixos/configuration.nix:257
-                   git
-Referenced by    man-paths
-                 system-path
-                 dev-shell
+╭─ WHY ───────────────────────────────────────────────────────────────╮
+│ git                                                                │
+│ Type: software package / command                                   │
+├─ WHAT IS THIS? ────────────────────────────────────────────────────┤
+│ Tracks changes to files and manages Git repositories. It is        │
+│ provided by the git-2.55.0 package.                                │
+├─ WHY IS IT HERE? ──────────────────────────────────────────────────┤
+│ It is present because your Nix configuration declares it directly. │
+├─ DETAILS ──────────────────────────────────────────────────────────┤
+│ Package         git-2.55.0                                         │
+│ Comes from      Declarative Nix configuration                      │
+│ Declared in     /etc/nixos/configuration.nix:257                   │
+╰────────────────────────────────────────────────────────────────────╯
 ```
-
 ## One question, different evidence
 
 Most queries do not need a subcommand.

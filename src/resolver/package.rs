@@ -88,6 +88,10 @@ fn resolve_nix(name: &str) -> Result<Option<Finding>> {
     .fact("Store path", store_root.display().to_string())
     .fact("Executable", canonical.display().to_string());
 
+    if let Some(description) = system::command_description(name) {
+        finding = finding.fact("Description", description);
+    }
+
     let mut declarations = find_nix_declarations(name);
     if package_name != name {
         for declaration in find_nix_declarations(&package_name) {

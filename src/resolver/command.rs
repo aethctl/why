@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 
 use crate::model::Finding;
 use crate::ownership;
+use crate::system;
 
 pub fn resolve(name: &str) -> Result<Finding> {
     let Some(path) = ownership::command_path(name) else {
@@ -15,6 +16,10 @@ pub fn resolve(name: &str) -> Result<Finding> {
         format!("'{name}' resolves to {}", canonical.display()),
     )
     .fact("Path", canonical.display().to_string());
+
+    if let Some(description) = system::command_description(name) {
+        finding = finding.fact("Description", description);
+    }
 
     if let Some(package) = ownership::nix_store_package(&canonical) {
         finding = finding
