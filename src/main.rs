@@ -10,7 +10,14 @@ use clap::Parser;
 
 use cli::{Cli, Commands};
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("why: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
 
     let finding = match (&cli.command, &cli.subject) {
@@ -20,9 +27,10 @@ fn main() -> Result<()> {
         (Some(Commands::File { path }), _) => resolver::file::resolve(path)?,
         (Some(Commands::Process { pid }), _) => resolver::process::resolve(*pid)?,
         (Some(Commands::Port { port }), _) => resolver::port::resolve(*port)?,
+        (Some(Commands::Env { name }), _) => resolver::env::resolve(name)?,
         (None, Some(subject)) => resolver::auto::resolve(subject)?,
         (None, None) => bail!("tell me what to explain, for example: why git"),
     };
 
-    render::print(&finding, cli.json)
+    render::print(&finding, cli.json, cli.plain)
 }

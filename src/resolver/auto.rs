@@ -1,3 +1,4 @@
+use std::env;
 use std::path::Path;
 
 use anyhow::{Result, bail};
@@ -9,6 +10,10 @@ use crate::resolver;
 pub fn resolve(subject: &str) -> Result<Finding> {
     if subject == "this" {
         return resolver::project::resolve_current();
+    }
+
+    if let Some(name) = subject.strip_prefix('$') {
+        return resolver::env::resolve(name);
     }
 
     if let Some(port) = subject
@@ -28,6 +33,10 @@ pub fn resolve(subject: &str) -> Result<Finding> {
         return resolver::process::resolve(pid);
     }
 
+    if env::var_os(subject).is_some() {
+        return resolver::env::resolve(subject);
+    }
+
     if let Ok(finding) = resolver::package::resolve(subject) {
         return Ok(finding);
     }
@@ -40,7 +49,9 @@ pub fn resolve(subject: &str) -> Result<Finding> {
         return resolver::command::resolve(subject);
     }
 
-    bail!("nothing matched '{subject}'")
+    bail!(
+        "nothing matched '{subject}'\n\nchecked: environment, package, service, command, file, process, port\ntry an explicit resolver such as: why package {subject}"
+    )
 }
 
 fn looks_like_path(subject: &str) -> bool {

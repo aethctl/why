@@ -14,8 +14,12 @@ why git
 why :8080
 why 1234
 why ./Cargo.toml
+why HOME
 why this
 ```
+
+`why this` understands the current project and can surface its branch,
+repository state, detected stack, live project processes, and listening ports.
 
 Explicit resolvers remain available when a name is ambiguous:
 
@@ -26,15 +30,18 @@ why service docker
 why file /run/current-system/sw/bin/git
 why process 1234
 why port 8080
+why env XCURSOR_THEME
 why --json git
+why --plain this
 ```
 
 Current resolvers cover commands, packages, systemd services, files and symlinks,
-processes through `/proc`, listening ports, Git-backed file provenance, and
-basic project context.
+processes through `/proc`, listening ports, environment variables, Git-backed
+file provenance, and current-project context.
 
 Facts carry evidence metadata in JSON. Terminal output marks inferred facts
-instead of presenting them as confirmed.
+instead of presenting them as confirmed. Credential-like environment values
+are redacted automatically.
 
 ## Principles
 

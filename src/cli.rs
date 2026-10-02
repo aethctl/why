@@ -6,6 +6,9 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
+    #[arg(long, global = true)]
+    pub plain: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 
@@ -41,5 +44,9 @@ pub enum Commands {
 
     Port {
         port: u16,
+    },
+
+    Env {
+        name: String,
     },
 }
