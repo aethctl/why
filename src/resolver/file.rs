@@ -53,7 +53,7 @@ pub fn resolve(input: &str) -> Result<Finding> {
     if let Some(repo) = git_root(&canonical) {
         finding = finding.fact("Git repo", repo.display().to_string());
 
-        if let Some(state) = git_state(&repo, &path) {
+        if let Some(state) = git_state(&repo, &canonical) {
             finding = finding.fact("Git state", state);
         }
     }
