@@ -14,7 +14,7 @@ pub fn print(finding: &Finding, json: bool) -> Result<()> {
     println!();
 
     for fact in &finding.facts {
-        println!("{:<16} {}", fact.label.dimmed(), fact.value);
+        print_fact(&fact.label, &fact.value);
     }
 
     if !finding.notes.is_empty() {
@@ -25,4 +25,15 @@ pub fn print(finding: &Finding, json: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_fact(label: &str, value: &str) {
+    let mut lines = value.lines();
+    let first = lines.next().unwrap_or_default();
+
+    println!("{:<16} {}", label.dimmed(), first);
+
+    for line in lines {
+        println!("{:<16} {}", "", line);
+    }
 }
