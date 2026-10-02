@@ -1,10 +1,11 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
 use crate::model::Finding;
 use crate::ownership;
+use crate::system;
 
 pub fn resolve(input: &str) -> Result<Finding> {
     let path = PathBuf::from(input);
@@ -49,5 +50,63 @@ pub fn resolve(input: &str) -> Result<Finding> {
         finding = finding.note("No supported package manager claimed ownership of this path.");
     }
 
+    if let Some(repo) = git_root(&canonical) {
+        finding = finding.fact("Git repo", repo.display().to_string());
+
+        if let Some(state) = git_state(&repo, &path) {
+            finding = finding.fact("Git state", state);
+        }
+    }
+
     Ok(finding)
+}
+
+fn git_root(path: &Path) -> Option<PathBuf> {
+    let start = if path.is_dir() { path } else { path.parent()? };
+
+    for ancestor in start.ancestors() {
+        if ancestor.join(".git").exists() {
+            return Some(ancestor.to_path_buf());
+        }
+    }
+
+    None
+}
+
+fn git_state(repo: &Path, path: &Path) -> Option<String> {
+    if !system::command_exists("git") {
+        return None;
+    }
+
+    let relative = path.strip_prefix(repo).ok()?;
+    let repo = repo.to_string_lossy();
+    let relative = relative.to_string_lossy();
+
+    let tracked = system::run(
+        "git",
+        &["-C", &repo, "ls-files", "--error-unmatch", &relative],
+    )
+    .ok()?;
+    if !tracked.success {
+        return Some("untracked".to_owned());
+    }
+
+    let status = system::run("git", &["-C", &repo, "status", "--short", "--", &relative]).ok()?;
+    if !status.success || status.stdout.is_empty() {
+        return Some("tracked, clean".to_owned());
+    }
+
+    Some(format!("tracked, modified ({})", status.stdout))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::git_root;
+    use std::path::Path;
+
+    #[test]
+    fn finds_git_root_from_current_repo() {
+        let root = git_root(Path::new("src/main.rs"));
+        assert!(root.is_some());
+    }
 }
