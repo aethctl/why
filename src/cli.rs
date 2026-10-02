@@ -13,11 +13,30 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     #[command(alias = "cmd")]
-    Command { name: String },
+    Command {
+        name: String,
+    },
 
     #[command(alias = "svc")]
-    Service { name: String },
+    Service {
+        name: String,
+    },
 
     #[command(alias = "pkg")]
-    Package { name: String },
+    Package {
+        name: String,
+    },
+
+    File {
+        path: String,
+    },
+
+    #[command(alias = "proc")]
+    Process {
+        pid: u32,
+    },
+
+    Port {
+        port: u16,
+    },
 }
