@@ -71,11 +71,13 @@ fn resolve_nix(name: &str) -> Result<Option<Finding>> {
         return resolve_nix_profile(name);
     };
 
+    let from_system_profile = path.starts_with("/run/current-system/sw/");
     let canonical = path.canonicalize().unwrap_or(path);
     let Some(store_root) = ownership::nix_store_root(&canonical) else {
         return resolve_nix_profile(name);
     };
     let package = ownership::nix_store_package(&canonical).unwrap_or_else(|| name.to_owned());
+    let package_name = nix_package_name(&package);
 
     let mut finding = Finding::new(
         name,
@@ -86,15 +88,31 @@ fn resolve_nix(name: &str) -> Result<Option<Finding>> {
     .fact("Store path", store_root.display().to_string())
     .fact("Executable", canonical.display().to_string());
 
-    let declarations = find_nix_declarations(name);
-    if declarations.is_empty() {
-        finding = finding.note(
-            "The package is reachable from PATH, but no matching declaration was found in known Nix configuration roots.",
-        );
-    } else {
-        finding = finding.fact("Declared at", declarations.join("\n"));
+    let mut declarations = find_nix_declarations(name);
+    if package_name != name {
+        for declaration in find_nix_declarations(&package_name) {
+            if !declarations.contains(&declaration) {
+                declarations.push(declaration);
+            }
+        }
+    }
 
-        if let Some(history) = nix_declaration_history(name, &declarations) {
+    if declarations.is_empty() {
+        if from_system_profile {
+            finding = finding.fact("Source", "NixOS system profile").fact(
+                "Reason",
+                "Included transitively by the active system closure",
+            );
+        } else {
+            finding = finding
+                .note("No explicit declaration was found in the known Nix configuration roots.");
+        }
+    } else {
+        finding = finding
+            .fact("Source", "Declarative Nix configuration")
+            .fact("Declared at", declarations.join("\n"));
+
+        if let Some(history) = nix_declaration_history(&package_name, &declarations) {
             finding = finding.fact("History", history);
         }
     }
@@ -103,11 +121,19 @@ fn resolve_nix(name: &str) -> Result<Option<Finding>> {
         finding = finding.fact("Referenced by", referrers);
     }
 
-    finding = finding.note(
-        "Nix store paths are immutable. Change the package declaration and rebuild instead of deleting the store path directly.",
-    );
-
     Ok(Some(finding))
+}
+
+fn nix_package_name(store_package: &str) -> String {
+    let mut parts = store_package.rsplitn(2, '-');
+    let last = parts.next().unwrap_or(store_package);
+    let rest = parts.next();
+
+    if last.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        rest.unwrap_or(store_package).to_owned()
+    } else {
+        store_package.to_owned()
+    }
 }
 
 fn resolve_nix_profile(name: &str) -> Result<Option<Finding>> {
@@ -307,12 +333,19 @@ fn line_mentions(line: &str, name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::line_mentions;
+    use super::{line_mentions, nix_package_name};
 
     #[test]
     fn finds_nix_package_tokens() {
         assert!(line_mentions("  git", "git"));
         assert!(line_mentions("  pkgs.git", "git"));
         assert!(!line_mentions("  github-cli", "git"));
+    }
+
+    #[test]
+    fn strips_store_package_version() {
+        assert_eq!(nix_package_name("coreutils-9.11"), "coreutils");
+        assert_eq!(nix_package_name("git-2.55.0"), "git");
+        assert_eq!(nix_package_name("hello"), "hello");
     }
 }
